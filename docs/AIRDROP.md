@@ -9,6 +9,30 @@ Together they enable AirDrop on the AX200 under macOS Sequoia.
 Do all of this on a **USB stick's** EFI, never the internal one, so the machine
 stays bootable if something is wrong.
 
+## Verified configuration
+
+On the machine this repository documents (Intel AX200, macOS 15.8.3 build
+24H241, OpenCore 1.0.8), booting the staged USB EFI produced:
+
+- `ForbiddenItlwm` 0.5.4 and `BTLEAdvFixup` 0.9.1 loaded; `AirportItlwm` and
+  `IntelBTPatcher` not loaded.
+- `ifconfig -l` includes `awdl0`, and `system_profiler SPAirPortDataType`
+  reports `AirDrop: Supported`.
+- `ioreg` shows:
+
+  ```
+  "ItlwmAWDLBuildCheck"       = "verified"
+  "ItlwmAWDLInterfaceBuild"   = "forbidden-0.5.4-beta.2-sequoia"
+  "ITLAWDLCoexAdded"          = Yes
+  "ITLAWDLCoexChannel"        = 149
+  "ITLAWDLCoexCountryLearned" = Yes
+  ```
+
+- `sharingd` advertises `AirDropUsable`, and `bluetoothd` sees nearby devices
+  over BLE (so `BTLEAdvFixup` is active).
+
+`scripts/airdrop-check.sh` prints all of the above after a boot.
+
 ## Requirements
 
 - macOS Sequoia 15.8.x (this was verified against 15.8.3, build 24H241).

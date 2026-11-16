@@ -171,6 +171,11 @@ is in [docs/AIRDROP.md](docs/AIRDROP.md). In short:
 
 5. Turn on AirDrop on both devices and send a file each way.
 
+This was confirmed working on the machine this repository documents: after
+booting the staged USB EFI, `SPAirPortDataType` reports `AirDrop: Supported`,
+`awdl0` is up on channel 149, and `sharingd` advertises `AirDropUsable`. The
+raw output is in [docs/AIRDROP.md](docs/AIRDROP.md#verified-configuration).
+
 ## Repository layout
 
 ```
@@ -199,6 +204,7 @@ tools/          bt-tool.swift, a small IOBluetooth CLI
 | `collect-bt-logs.sh` | gather kernel and `bluetoothd` logs after a boot |
 | `post-boot-check.sh` | quick post-boot Bluetooth state dump |
 | `diag-read.sh` | dump IORegistry `diag_*` keys from the instrumented kext |
+| `airdrop-check.sh` | post-boot check for the AWDL/AirDrop setup |
 | `mount-usb-efi.sh` | repair and mount the USB ESP (needs root) |
 
 ## Building
