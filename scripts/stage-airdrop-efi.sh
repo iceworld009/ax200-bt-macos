@@ -50,13 +50,19 @@ REMOVABLE="$(diskutil info "$ESP" 2>/dev/null | awk -F': *' '/Removable Media/{p
 echo "target      : $ESP"
 echo "target disk : ${TARGET_DISK:-unknown} (removable: ${REMOVABLE:-unknown})"
 echo "boot disk   : ${BOOT_DISK:-unknown}"
-if [[ -n "${BOOT_DISK:-}" && "${TARGET_DISK:-}" == "${BOOT_DISK}" ]]; then
-    echo "error: refusing to modify the internal boot ESP" >&2
-    exit 3
-fi
-if [[ "${REMOVABLE:-}" != "Removable" ]]; then
-    echo "error: $ESP is not reported as removable; refusing" >&2
-    exit 3
+if [[ "${ALLOW_INTERNAL_ESP:-0}" == "1" ]]; then
+    echo "WARNING: ALLOW_INTERNAL_ESP=1 - modifying the internal boot ESP"
+else
+    if [[ -n "${BOOT_DISK:-}" && "${TARGET_DISK:-}" == "${BOOT_DISK}" ]]; then
+        echo "error: refusing to modify the internal boot ESP" >&2
+        echo "       (set ALLOW_INTERNAL_ESP=1 to override)" >&2
+        exit 3
+    fi
+    if [[ "${REMOVABLE:-}" != "Removable" ]]; then
+        echo "error: $ESP is not reported as removable; refusing" >&2
+        echo "       (set ALLOW_INTERNAL_ESP=1 to override)" >&2
+        exit 3
+    fi
 fi
 
 for src in "$FORB" "$BTLE"; do
