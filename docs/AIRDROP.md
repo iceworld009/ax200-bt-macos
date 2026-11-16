@@ -30,6 +30,20 @@ On the machine this repository documents (Intel AX200, macOS 15.8.3 build
 
 - `sharingd` advertises `AirDropUsable`, and `bluetoothd` sees nearby devices
   over BLE (so `BTLEAdvFixup` is active).
+- An AirDrop transfer completed over AWDL. The `sharingd` metric was:
+
+  ```
+  MetricEvent 'com.apple.sharing.airdrop.send-finish':
+    { "result": 0, "failureSubType": "none", "size": 102285,
+      "transport": "awdl", "rssi": -40, "receiverDeviceType": "iPhone" }
+
+  MetricEvent 'com.apple.sharing.AirDrop.TransferResult':
+    { "sender": 1, "success": true, "bytesPerSec": 82711,
+      "bundleID": "com.apple.Photos" }
+  ```
+
+  `transport: "awdl"` is the point: the transfer went over the AWDL link, not
+  Bluetooth or the network.
 
 `scripts/airdrop-check.sh` prints all of the above after a boot.
 

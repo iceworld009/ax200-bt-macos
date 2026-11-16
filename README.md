@@ -173,8 +173,9 @@ is in [docs/AIRDROP.md](docs/AIRDROP.md). In short:
 
 This was confirmed working on the machine this repository documents: after
 booting the staged USB EFI, `SPAirPortDataType` reports `AirDrop: Supported`,
-`awdl0` is up on channel 149, and `sharingd` advertises `AirDropUsable`. The
-raw output is in [docs/AIRDROP.md](docs/AIRDROP.md#verified-configuration).
+`awdl0` is up on channel 149, `sharingd` advertises `AirDropUsable`, and a file
+transfer completed with `transport: "awdl"` and `success: true`. The raw output
+is in [docs/AIRDROP.md](docs/AIRDROP.md#verified-configuration).
 
 ## Repository layout
 
