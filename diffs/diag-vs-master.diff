@@ -1,0 +1,186 @@
+diff --git a/IntelBTPatcher/IntelBTPatcher.cpp b/IntelBTPatcher/IntelBTPatcher.cpp
+index 79cce98..f78e81e 100644
+--- a/IntelBTPatcher/IntelBTPatcher.cpp
++++ b/IntelBTPatcher/IntelBTPatcher.cpp
+@@ -11,6 +11,30 @@
+ 
+ #include "IntelBTPatcher.hpp"
+ 
++// Diagnostic logging. IOLog lands in the kernel log and the unified log
++// (process "kernel"), unlike DBGLOG which needs Lilu debug boot-args.
++#define IBTLOG(fmt, ...) IOLog("ibtp: " fmt "\n", ##__VA_ARGS__)
++
++static const char *ibtOpcodeName(uint16_t op)
++{
++    switch (op) {
++        case 0x0c03: return "HCI_Reset";
++        case 0x0401: return "Inquiry";
++        case 0x0402: return "InquiryCancel";
++        case 0x0405: return "CreateConnection";
++        case 0x0406: return "Disconnect";
++        case 0x0409: return "AcceptConnectionRequest";
++        case 0x040a: return "RejectConnectionRequest";
++        case 0x040b: return "CreateConnectionCancel";
++        case 0x0c52: return "SetEventMaskPage2";
++        case 0x200b: return "LE_SetScanParameters";
++        case 0x200c: return "LE_SetScanEnable";
++        case 0x200d: return "LE_CreateConnection";
++        case 0x2016: return "LE_CreateConnection";
++        default: return "?";
++    }
++}
++
+ static CIntelBTPatcher ibtPatcher;
+ static CIntelBTPatcher *callbackIBTPatcher = nullptr;
+ 
+@@ -71,13 +95,16 @@ bool CIntelBTPatcher::_randomAddressInit = false;
+ bool CIntelBTPatcher::init()
+ {
+     DBGLOG(DRV_NAME, "%s", __PRETTY_FUNCTION__);
++    IBTLOG("init: kernelVersion=%d", (int)getKernelVersion());
+     callbackIBTPatcher = this;
+     if (getKernelVersion() < KernelVersion::Monterey) {
++        IBTLOG("init: hooking IOBluetoothFamily (pre-Monterey)");
+         lilu.onKextLoadForce(&IntelBTPatcher_IOBluetoothInfo, 1,
+         [](void *user, KernelPatcher &patcher, size_t index, mach_vm_address_t address, size_t size) {
+             callbackIBTPatcher->processKext(patcher, index, address, size);
+         }, this);
+     } else {
++        IBTLOG("init: hooking IOUSBHostFamily (Monterey+)");
+         lilu.onKextLoadForce(&IntelBTPatcher_IOUsbHostInfo, 1,
+         [](void *user, KernelPatcher &patcher, size_t index, mach_vm_address_t address, size_t size) {
+             callbackIBTPatcher->processKext(patcher, index, address, size);
+@@ -115,6 +142,7 @@ void CIntelBTPatcher::processKext(KernelPatcher &patcher, size_t index, mach_vm_
+     } else {
+         if (IntelBTPatcher_IOUsbHostInfo.loadIndex == index) {
+             SYSLOG(DRV_NAME, "%s", IntelBTPatcher_IOUsbHostInfo.id);
++            IBTLOG("processKext: IOUSBHostFamily loaded, routing deviceRequest");
+             
+             KernelPatcher::RouteRequest hostDeviceRequest {
+             "__ZN15IOUSBHostDevice13deviceRequestEP9IOServiceRN11StandardUSB13DeviceRequestEPvP18IOMemoryDescriptorRjP19IOUSBHostCompletionj",
+@@ -124,8 +152,10 @@ void CIntelBTPatcher::processKext(KernelPatcher &patcher, size_t index, mach_vm_
+             patcher.routeMultiple(index, &hostDeviceRequest, 1, address, size);
+             if (patcher.getError() == KernelPatcher::Error::NoError) {
+                 SYSLOG(DRV_NAME, "routed %s", hostDeviceRequest.symbol);
++                IBTLOG("processKext: routing OK (deviceRequest hooked)");
+             } else {
+                 SYSLOG(DRV_NAME, "failed to resolve %s, error = %d", hostDeviceRequest.symbol, patcher.getError());
++                IBTLOG("processKext: routing FAILED error=%d", patcher.getError());
+                 patcher.clearError();
+             }
+         }
+@@ -165,16 +195,29 @@ IOReturn CIntelBTPatcher::newHostDeviceRequest(void *that, IOService *provider,
+     char hciBuf[MAX_HCI_BUF_LEN] = {0};
+     
+     if (data == nullptr) {
+-        if (descriptor != nullptr &&
+-            (getKernelVersion() < KernelVersion::Sequoia || !descriptor->prepare(kIODirectionOut))) {
+-            if (descriptor->getLength() > 0) {
++        IOReturn prepRet = kIOReturnSuccess;
++        bool calledPrepare = false;
++        bool canRead = false;
++        if (descriptor != nullptr) {
++            if (getKernelVersion() < KernelVersion::Sequoia) {
++                canRead = true;
++            } else {
++                prepRet = descriptor->prepare(kIODirectionOut);
++                calledPrepare = true;
++                canRead = (prepRet == kIOReturnSuccess);
++            }
++            if (canRead && descriptor->getLength() > 0) {
+                 descriptor->readBytes(0, hciBuf, min(descriptor->getLength(), MAX_HCI_BUF_LEN));
+                 hdrLen = (uint32_t)min(descriptor->getLength(), MAX_HCI_BUF_LEN);
+             }
+-            if (getKernelVersion() >= KernelVersion::Sequoia)
++            if (calledPrepare && prepRet == kIOReturnSuccess)
+                 descriptor->complete(kIODirectionOut);
+         }
+         hdr = (HciCommandHdr *)hciBuf;
++        // HCI reset: the random address has to be sent again before the next
++        // LE scan parameter command (upstream behaviour).
++        if (hdr->opcode == HCI_OP_RESET)
++            _randomAddressInit = false;
+         if (hdr->opcode == HCI_OP_LE_SET_SCAN_PARAM) {
+             if (!_randomAddressInit) {
+                 randomAddressRequest.bmRequestType = makeDeviceRequestbmRequestType(kRequestDirectionOut, kRequestTypeClass, kRequestRecipientInterface);
+@@ -190,31 +233,41 @@ IOReturn CIntelBTPatcher::newHostDeviceRequest(void *that, IOService *provider,
+                 writeHCIDescriptor->complete();
+                 const char *randAddressDump = _hexDumpHCIData((uint8_t *)randomAddressHci, 9);
+                 if (randAddressDump) {
+-                    SYSLOG(DRV_NAME, "[PATCH] Sending Random Address HCI %lld %s", ret, randAddressDump);
++                    SYSLOG(DRV_NAME, "[PATCH] Sending Random Address HCI %d %s", ret, randAddressDump);
++                    IBTLOG("inject 0xE0 VS_RandomAddress len=9 -> 0x%x [%s]", ret, randAddressDump);
+                     IOFree((void *)randAddressDump, 9 * 3 + 1);
+                 }
+                 _randomAddressInit = true;
+-                SYSLOG(DRV_NAME, "[PATCH] Resend LE SCAN PARAM HCI %lld", ret);
++                SYSLOG(DRV_NAME, "[PATCH] Resend LE SCAN PARAM HCI %d", ret);
++                IBTLOG("inject 0xE0 done, LE_SetScanParam will be replayed by original caller");
+             }
+         }
++        IOReturn ret = FunctionCast(newHostDeviceRequest, callbackIBTPatcher->oldHostDeviceRequest)(that, provider, request, data, descriptor, length, completion, timeout);
++        if (descriptor == nullptr) {
++            IBTLOG("HCI CMD opcode=0x%04x(%s) len=%u desc=NULL -> 0x%x length=%u",
++                   hdr->opcode, ibtOpcodeName(hdr->opcode), hdr->len, ret, length);
++        } else {
++            IBTLOG("HCI CMD opcode=0x%04x(%s) len=%u descLen=%llu prep=0x%x(read=%d) wLen=%u -> 0x%x length=%u",
++                   hdr->opcode, ibtOpcodeName(hdr->opcode), hdr->len,
++                   descriptor->getLength(), prepRet, canRead, request.wLength, ret, length);
++        }
++        return ret;
+     } else {
+-        hdr = (HciCommandHdr *)data;
+-        hdrLen = request.wLength - 3;
+-    }
+-    if (hdr) {
+-        // HCI reset, we need to send Random address again
+-        if (hdr->opcode == HCI_OP_RESET)
+-            _randomAddressInit = false;
+-#if DEBUG
+-        DBGLOG(DRV_NAME, "[%s] bRequest: 0x%x direction: %s type: %s recipient: %s wValue: 0x%02x wIndex: 0x%02x opcode: 0x%04x len: %d length: %d async: %d", provider->getName(), request.bRequest, requestDirectionNames[(request.bmRequestType & kDeviceRequestDirectionMask) >> kDeviceRequestDirectionPhase], requestRecipientNames[(request.bmRequestType & kDeviceRequestRecipientMask) >> kDeviceRequestRecipientPhase], requestTypeNames[(request.bmRequestType & kDeviceRequestTypeMask) >> kDeviceRequestTypePhase], request.wValue, request.wIndex, hdr->opcode, hdr->len, request.wLength, completion != nullptr);
+-        if (hdrLen) {
+-            const char *dump = _hexDumpHCIData((uint8_t *)hdr, hdrLen);
+-            if (dump) {
+-                DBGLOG(DRV_NAME, "[Request]: %s", dump);
+-                IOFree((void *)dump, hdrLen * 3 + 1);
+-            }
++        IOReturn ret = FunctionCast(newHostDeviceRequest, callbackIBTPatcher->oldHostDeviceRequest)(that, provider, request, data, descriptor, length, completion, timeout);
++        // data != nullptr is an IN transfer (interrupt event read or bulk ACL
++        // read). Only the synchronous case has valid contents at return time.
++        if (completion == nullptr && request.wLength > 0 && data != nullptr) {
++            const uint8_t *b = (const uint8_t *)data;
++            uint32_t n = min(request.wLength, 16u);
++            char dump[16 * 3 + 1] = {0};
++            for (uint32_t i = 0; i < n; i++)
++                snprintf(dump + i * 3, 4, "%02x ", b[i]);
++            IBTLOG("USB IN bRequest=0x%02x wLen=%u ret=0x%x len=%u [%s]",
++                   request.bRequest, request.wLength, ret, length, dump);
++        } else {
++            IBTLOG("USB IN bRequest=0x%02x wLen=%u async completion=%p ret=0x%x len=%u",
++                   request.bRequest, request.wLength, completion, ret, length);
+         }
+-#endif
++        return ret;
+     }
+-    return FunctionCast(newHostDeviceRequest, callbackIBTPatcher->oldHostDeviceRequest)(that, provider, request, data, descriptor, length, completion, timeout);
+ }
+diff --git a/IntelBluetoothFirmware/IntelBluetoothFirmware.cpp b/IntelBluetoothFirmware/IntelBluetoothFirmware.cpp
+index 675ec76..1df1d45 100644
+--- a/IntelBluetoothFirmware/IntelBluetoothFirmware.cpp
++++ b/IntelBluetoothFirmware/IntelBluetoothFirmware.cpp
+@@ -51,6 +51,7 @@ void IntelBluetoothFirmware::free() {
+ bool IntelBluetoothFirmware::start(IOService *provider)
+ {
+     XYLog("Driver Start()\n");
++    XYLog("AX200DIAG firmware-kext 2.5.0d1 start\n");
+     char fwName[64];
+     m_pDevice = OSDynamicCast(IOUSBHostDevice, provider);
+     if (m_pDevice == NULL) {
+@@ -97,6 +98,7 @@ bool IntelBluetoothFirmware::start(IOService *provider)
+ 
+ void IntelBluetoothFirmware::publishReg(bool isSucceed, const char *fwName)
+ {
++    XYLog("AX200DIAG publishReg loaded=%d fw=%s\n", isSucceed, fwName);
+     m_pDevice->setProperty("FirmwareLoaded", isSucceed);
+     if (isSucceed)
+         setProperty("fw_name", OSString::withCString(fwName));

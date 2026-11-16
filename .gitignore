@@ -1,0 +1,15 @@
+# Build dependencies, cloned by bootstrap.sh
+/upstream/
+/MacKernelSDK/
+/Lilu/
+/build/
+/build-*/
+
+# Scratch
+/backups/
+/logs/
+*.o
+*.log
+
+# macOS
+.DS_Store
