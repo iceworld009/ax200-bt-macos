@@ -1,9 +1,10 @@
 #!/bin/bash
 # Stage the ForbiddenItlwm AWDL driver on a USB test ESP.
 #
-# Usage (as root):
-#   sudo scripts/stage-airdrop-efi.sh /Volumes/MACOSUSB \
+# Usage:
+#   scripts/stage-airdrop-efi.sh /Volumes/MACOSUSB \
 #        [ForbiddenItlwm.kext] [BTLEAdvFixup.kext]
+# (prepend sudo if the ESP is not writable by your user)
 #
 # The kext arguments default to ./airdrop/ForbiddenItlwm.kext and
 # ./airdrop/BTLEAdvFixup.kext (unzip the Sequoia release assets there first).
@@ -25,12 +26,9 @@ FORB="${2:-$ROOT/airdrop/ForbiddenItlwm.kext}"
 BTLE="${3:-$ROOT/airdrop/BTLEAdvFixup.kext}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
-if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    echo "error: run as root:  sudo $0 $*" >&2
-    exit 1
-fi
 if [[ -z "$TARGET" ]]; then
-    echo "usage: sudo $0 /Volumes/<USB_ESP> [ForbiddenItlwm.kext] [BTLEAdvFixup.kext]" >&2
+    echo "usage: $0 /Volumes/<USB_ESP> [ForbiddenItlwm.kext] [BTLEAdvFixup.kext]" >&2
+    echo "       (prepend sudo if the ESP is not writable by your user)" >&2
     exit 2
 fi
 TARGET="${TARGET%/}"
@@ -65,6 +63,12 @@ for src in "$FORB" "$BTLE"; do
     [[ -d "$src" ]] || { echo "error: missing kext bundle: $src" >&2; exit 4; }
 done
 [[ -f "$PLIST" ]] || { echo "error: no $PLIST" >&2; exit 4; }
+
+if ! touch "$EFI/OC/.stage-write-test" 2>/dev/null; then
+    echo "error: $EFI/OC is not writable; re-run with sudo" >&2
+    exit 3
+fi
+rm -f "$EFI/OC/.stage-write-test"
 
 BACKUP="$ROOT/backups/EFI-airdrop-$STAMP.tar.gz"
 mkdir -p "$ROOT/backups"
