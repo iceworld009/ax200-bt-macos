@@ -1,4 +1,4 @@
-# Intel AX200 on macOS Sequoia: Bluetooth and AirDrop
+# Intel AX200 on macOS Sequoia: Bluetooth, AirDrop and Handoff
 
 Notes, kexts and scripts from getting an Intel AX200 (`8087:0029`) working on a
 macOS 15.8.3 (24H241) OpenCore hackintosh. Two independent problems, two fixes:
@@ -7,7 +7,8 @@ macOS 15.8.3 (24H241) OpenCore hackintosh. Two independent problems, two fixes:
   cause was a stale NVRAM variable that made `bluetoothd` fall back to a
   non-existent Broadcom chip.
 - **AirDrop** does not work with `AirportItlwm`, because it implements no AWDL.
-  The `ForbiddenItlwm` fork adds AWDL and makes AirDrop work.
+  The `ForbiddenItlwm` fork adds AWDL, which makes AirDrop work — and Handoff
+  and Universal Clipboard with it.
 
 This is a record of one machine, not a supported installer. Read a section
 through before applying it.
@@ -19,7 +20,7 @@ through before applying it.
 | Wi-Fi / Bluetooth | Intel AX200, Bluetooth over USB `8087:0029` |
 | macOS | 15.8.3, build 24H241 (Sequoia) |
 | Bootloader | OpenCore 1.0.8 (RELEASE) |
-| Wi-Fi driver | `AirportItlwm` 2.4.0 (or `ForbiddenItlwm` for AirDrop) |
+| Wi-Fi driver | `AirportItlwm` 2.4.0, or `ForbiddenItlwm` 0.5.4 for AirDrop/Handoff |
 | Bluetooth | `IntelBluetoothFirmware` + `IntelBTPatcher` + `BlueToolFixup` |
 
 ## Bluetooth
@@ -149,7 +150,8 @@ the documented behaviour of `AirportItlwm`.
 [retropineaple/ForbiddenItlwm](https://github.com/retropineaple/ForbiddenItlwm)
 is a fork that adds an AWDL implementation on top of the Intel driver, and a
 companion `BTLEAdvFixup.kext` that lets `bluetoothd` start LE advertising.
-Together they enable AirDrop on the AX200.
+Together they enable AirDrop on the AX200 — and, because they bring AWDL up,
+Handoff and Universal Clipboard as well.
 
 **Set this up on a USB stick first.** Copy your working EFI to a USB stick and
 make every change there, so the internal EFI stays bootable. Once the stick
@@ -176,8 +178,9 @@ boots with working AirDrop, the same changes can be applied to the internal EFI
 This was confirmed working on the machine this repository documents, first on a
 staged USB EFI and then on the internal EFI: `SPAirPortDataType` reports
 `AirDrop: Supported`, `awdl0` is up on channel 149, `sharingd` advertises
-`AirDropUsable`, and a file transfer completed with `transport: "awdl"` and
-`success: true`. The raw output is in
+`AirDropUsable`, and file transfers completed both ways with `transport: "awdl"`
+and `success: true` (1 MB/s for a photo, ~3.8 MB/s for a larger file). Handoff
+and Universal Clipboard also work. The raw output is in
 [docs/AIRDROP.md](docs/AIRDROP.md#verified-configuration).
 
 ## Repository layout

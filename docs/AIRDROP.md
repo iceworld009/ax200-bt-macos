@@ -4,7 +4,8 @@ AirDrop, Handoff and Continuity need AWDL, which `AirportItlwm` does not
 implement. [retropineaple/ForbiddenItlwm](https://github.com/retropineaple/ForbiddenItlwm)
 is a fork of the Intel Wi-Fi driver that adds an AWDL implementation, plus a
 companion `BTLEAdvFixup.kext` that lets `bluetoothd` start LE advertising.
-Together they enable AirDrop on the AX200 under macOS Sequoia.
+Together they enable AirDrop on the AX200 under macOS Sequoia — and, since they
+bring AWDL up, Handoff and Universal Clipboard as well.
 
 Do all of this on a **USB stick's** EFI first, never the internal one, so the
 machine stays bootable if something is wrong. Once the stick boots with working
@@ -33,7 +34,8 @@ internal EFI — produced:
 
 - `sharingd` advertises `AirDropUsable`, and `bluetoothd` sees nearby devices
   over BLE (so `BTLEAdvFixup` is active).
-- An AirDrop transfer completed over AWDL. The `sharingd` metric was:
+- AirDrop transfers completed in both directions over AWDL. The `sharingd`
+  metrics were:
 
   ```
   MetricEvent 'com.apple.sharing.airdrop.send-finish':
@@ -43,10 +45,19 @@ internal EFI — produced:
   MetricEvent 'com.apple.sharing.AirDrop.TransferResult':
     { "sender": 1, "success": true, "bytesPerSec": 82711,
       "bundleID": "com.apple.Photos" }
+
+  MetricEvent 'com.apple.sharing.AirDrop.TransferResult':
+    { "sender": 0, "success": true, "bytesPerSec": 1025026 }
   ```
 
   `transport: "awdl"` is the point: the transfer went over the AWDL link, not
-  Bluetooth or the network.
+  Bluetooth or the network. `sender` is 1 for Mac → iPhone and 0 for
+  iPhone → Mac.
+
+- Handoff and Universal Clipboard work too, which is expected once AWDL is up.
+  `sharingd` reports `Handoff active for device … : yes`, and its activity
+  advertisement carries `SFActivityAdvertiserOptionFlagCopyPasteKey` (the
+  clipboard payload).
 
 `scripts/airdrop-check.sh` prints all of the above after a boot.
 
