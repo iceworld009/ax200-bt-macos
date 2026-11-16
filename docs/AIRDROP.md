@@ -45,6 +45,23 @@ shasum -a 256 *.zip
 Each zip contains a `.kext` bundle. Unzip them and copy the bundles into the
 stick's `EFI/OC/Kexts`.
 
+## Automated setup
+
+`scripts/stage-airdrop-efi.sh` performs the OpenCore changes below in one step.
+It backs up the whole EFI first, refuses to touch the internal ESP, and
+validates the result:
+
+```sh
+mkdir -p airdrop
+unzip -o ForbiddenItlwm-0.5.4-beta.2-Sequoia.zip -d airdrop
+unzip -o BTLEAdvFixup-0.9.1-Sequoia.zip -d airdrop
+sudo scripts/stage-airdrop-efi.sh /Volumes/MACOSUSB
+```
+
+It uses `scripts/nvram-fix-config.py` (Bluetooth NVRAM fix) and
+`scripts/airdrop-config.py` (AWDL changes). The manual steps follow, for
+reference.
+
 ## OpenCore changes (on the USB stick)
 
 Mount the stick's ESP. On this install that needs root:

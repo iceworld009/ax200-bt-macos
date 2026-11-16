@@ -188,6 +188,9 @@ tools/          bt-tool.swift, a small IOBluetooth CLI
 | Script | Purpose |
 |---|---|
 | `verify-nvram-fix.sh` | confirm the NVRAM fix took effect after a reboot |
+| `nvram-fix-config.py` | apply the Bluetooth NVRAM fix to a `config.plist` |
+| `airdrop-config.py` | apply the AirDrop/AWDL changes to a `config.plist` |
+| `stage-airdrop-efi.sh` | stage ForbiddenItlwm on a USB ESP (backup, kexts, config, validate) |
 | `inspect-internal-config.py` | summarise the internal EFI's kexts and NVRAM |
 | `inspect-usb-config.py` | same, for a mounted USB EFI |
 | `internal-efi-phase1.sh` | mount and back up the internal ESP (needs root) |
