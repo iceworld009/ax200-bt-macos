@@ -152,8 +152,10 @@ companion `BTLEAdvFixup.kext` that lets `bluetoothd` start LE advertising.
 Together they enable AirDrop on the AX200.
 
 **Set this up on a USB stick first.** Copy your working EFI to a USB stick and
-make every change there, so the internal EFI stays bootable. The full procedure
-is in [docs/AIRDROP.md](docs/AIRDROP.md). In short:
+make every change there, so the internal EFI stays bootable. Once the stick
+boots with working AirDrop, the same changes can be applied to the internal EFI
+(it is what this machine runs now). The full procedure is in
+[docs/AIRDROP.md](docs/AIRDROP.md). In short:
 
 1. On the USB EFI, remove `AirportItlwm.kext`, add `ForbiddenItlwm.kext` and
    `BTLEAdvFixup.kext` (Sequoia builds).
@@ -171,11 +173,12 @@ is in [docs/AIRDROP.md](docs/AIRDROP.md). In short:
 
 5. Turn on AirDrop on both devices and send a file each way.
 
-This was confirmed working on the machine this repository documents: after
-booting the staged USB EFI, `SPAirPortDataType` reports `AirDrop: Supported`,
-`awdl0` is up on channel 149, `sharingd` advertises `AirDropUsable`, and a file
-transfer completed with `transport: "awdl"` and `success: true`. The raw output
-is in [docs/AIRDROP.md](docs/AIRDROP.md#verified-configuration).
+This was confirmed working on the machine this repository documents, first on a
+staged USB EFI and then on the internal EFI: `SPAirPortDataType` reports
+`AirDrop: Supported`, `awdl0` is up on channel 149, `sharingd` advertises
+`AirDropUsable`, and a file transfer completed with `transport: "awdl"` and
+`success: true`. The raw output is in
+[docs/AIRDROP.md](docs/AIRDROP.md#verified-configuration).
 
 ## Repository layout
 
@@ -196,7 +199,7 @@ tools/          bt-tool.swift, a small IOBluetooth CLI
 | `verify-nvram-fix.sh` | confirm the NVRAM fix took effect after a reboot |
 | `nvram-fix-config.py` | apply the Bluetooth NVRAM fix to a `config.plist` |
 | `airdrop-config.py` | apply the AirDrop/AWDL changes to a `config.plist` |
-| `stage-airdrop-efi.sh` | stage ForbiddenItlwm on a USB ESP (backup, kexts, config, validate) |
+| `stage-airdrop-efi.sh` | stage ForbiddenItlwm on an ESP (backup, kexts, config, validate); refuses the internal ESP unless `ALLOW_INTERNAL_ESP=1` |
 | `inspect-internal-config.py` | summarise the internal EFI's kexts and NVRAM |
 | `inspect-usb-config.py` | same, for a mounted USB EFI |
 | `internal-efi-phase1.sh` | mount and back up the internal ESP (needs root) |
@@ -248,6 +251,9 @@ swiftc -O -framework IOBluetooth -o bt-tool tools/bt-tool.swift
   back and keep a backup of the whole EFI.
 - AirDrop: see the uninstall steps at the end of
   [docs/AIRDROP.md](docs/AIRDROP.md).
+- Both the internal and USB EFIs were backed up before staging, as
+  `backups/EFI-airdrop-<timestamp>.tar.gz` plus a copy of the original
+  `config.plist`. Restore the one you need and boot it.
 
 ## Credits and license
 

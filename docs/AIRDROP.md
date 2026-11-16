@@ -6,13 +6,16 @@ is a fork of the Intel Wi-Fi driver that adds an AWDL implementation, plus a
 companion `BTLEAdvFixup.kext` that lets `bluetoothd` start LE advertising.
 Together they enable AirDrop on the AX200 under macOS Sequoia.
 
-Do all of this on a **USB stick's** EFI, never the internal one, so the machine
-stays bootable if something is wrong.
+Do all of this on a **USB stick's** EFI first, never the internal one, so the
+machine stays bootable if something is wrong. Once the stick boots with working
+AirDrop, the same changes can be applied to the internal EFI; that is what this
+machine runs now.
 
 ## Verified configuration
 
 On the machine this repository documents (Intel AX200, macOS 15.8.3 build
-24H241, OpenCore 1.0.8), booting the staged USB EFI produced:
+24H241, OpenCore 1.0.8), booting the staged EFI — first the USB stick, then the
+internal EFI — produced:
 
 - `ForbiddenItlwm` 0.5.4 and `BTLEAdvFixup` 0.9.1 loaded; `AirportItlwm` and
   `IntelBTPatcher` not loaded.
@@ -64,8 +67,8 @@ Reference versions used here:
 | `ForbiddenItlwm.kext` | 0.5.4-beta.2 (Sequoia) | release `v0.5.4-beta.2` |
 | `BTLEAdvFixup.kext` | 0.9.1 (Sequoia) | release `v0.5.4-beta.2` |
 | `Lilu.kext` | 1.7.2 | acidanthera/Lilu |
-| `IntelBluetoothFirmware.kext` | 2.5.1 | OpenIntelWireless |
-| `BlueToolFixup.kext` | 2.7.3 | acidanthera/BrcmPatchRAM |
+| `IntelBluetoothFirmware.kext` | 2.5.0d1 | OpenIntelWireless |
+| `BlueToolFixup.kext` | 2.7.2 | acidanthera/BrcmPatchRAM |
 
 ## Download
 
@@ -86,21 +89,21 @@ stick's `EFI/OC/Kexts`.
 ## Automated setup
 
 `scripts/stage-airdrop-efi.sh` performs the OpenCore changes below in one step.
-It backs up the whole EFI first, refuses to touch the internal ESP, and
-validates the result:
+It backs up the whole EFI first, refuses to touch the internal ESP (unless
+`ALLOW_INTERNAL_ESP=1` is set), and validates the result:
 
 ```sh
 mkdir -p airdrop
 unzip -o ForbiddenItlwm-0.5.4-beta.2-Sequoia.zip -d airdrop
 unzip -o BTLEAdvFixup-0.9.1-Sequoia.zip -d airdrop
-sudo scripts/stage-airdrop-efi.sh /Volumes/MACOSUSB
+scripts/stage-airdrop-efi.sh /Volumes/MACOSUSB
 ```
 
 It uses `scripts/nvram-fix-config.py` (Bluetooth NVRAM fix) and
 `scripts/airdrop-config.py` (AWDL changes). The manual steps follow, for
 reference.
 
-## OpenCore changes (on the USB stick)
+## OpenCore changes (on the USB stick, then the internal EFI)
 
 Mount the stick's ESP. On this install that needs root:
 
@@ -151,7 +154,8 @@ ocvalidate EFI/OC/config.plist
 
 ## First boot
 
-1. Boot the stick from the OpenCore picker.
+1. Boot the staged EFI from the OpenCore picker. When applying to the internal
+   EFI, remove the USB stick first so the internal one boots.
 2. Join your normal Wi-Fi network.
 3. Wait a minute, then confirm the driver and its AWDL listener are running:
 
